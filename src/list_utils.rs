@@ -28,11 +28,13 @@ impl<T> Item<T>
 {
     pub fn new(value: T, next: Option<&mut Item<T>>, previous: Option<&mut Item<T>>) -> Item<T>
     {
-        Item {
+        let mut this = Item {
             value: value,
             next:     Item::_get_ptr_if_item_not_null(next),
             previous: Item::_get_ptr_if_item_not_null(previous),
-        }
+        };
+
+        return this;
     }
 
     fn _get_ptr_if_item_not_null(item: Option<&mut Item<T>>) -> Option<*mut Item<T>>
@@ -85,7 +87,7 @@ impl<T> Item<T>
         }
     }
 
-    fn update(&mut self)
+    pub fn update(&mut self)
     {
         self.update_next();
         self.update_previous();
