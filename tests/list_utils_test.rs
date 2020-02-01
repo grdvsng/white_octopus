@@ -1,5 +1,5 @@
 #[path = "../src/list_utils.rs"] mod list_utils;
-use list_utils::{Item};
+use list_utils::{Item, List};
 
 
 #[test]
@@ -20,4 +20,13 @@ fn test_item()
     
     assert_eq!(item.get_next().unwrap().value, "next_updated");
     assert_eq!(item.get_previous().unwrap().value, "previous_updated");
+}
+
+#[test]
+fn test_list()
+{
+    let mut list: List<i32> = List::new();
+    
+    list.append(1);
+    list.append(2);
 }

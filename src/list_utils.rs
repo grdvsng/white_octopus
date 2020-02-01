@@ -3,7 +3,7 @@ use std::string::{ToString};
 
 
 pub struct Item<T>
-    where T: Copy + Clone + fmt::Display,
+where T: Copy + Clone + fmt::Display,
 {
     pub value: T, 
     next:      Option<*mut Item<T>>, 
@@ -11,11 +11,11 @@ pub struct Item<T>
 }
 
 impl<T> Copy for Item<T> 
-    where T: Copy + Clone + fmt::Display,
+where T: Copy + Clone + fmt::Display,
 {}
 
 impl<T> Clone for Item<T> 
-    where T: Copy + Clone + fmt::Display,
+where T: Copy + Clone + fmt::Display,
 {
     fn clone(&self) -> Item<T>
     {
@@ -24,7 +24,7 @@ impl<T> Clone for Item<T>
 }
 
 impl<T> Item<T>
-    where T: Copy + Clone + fmt::Display,
+where T: Copy + Clone + fmt::Display,
 {
     pub fn new(value: T, next: Option<&mut Item<T>>, previous: Option<&mut Item<T>>) -> Item<T>
     {
@@ -99,10 +99,15 @@ impl<T> Item<T>
         
         self.update();
     }
+
+    fn _next_redefinition(&mut self, next: &Self)
+    {
+
+    }
 }
 
 impl<T> fmt::Display for Item<T>
-    where T: Copy + Clone + fmt::Display,
+where T: Copy + Clone + fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
     {
@@ -111,7 +116,7 @@ impl<T> fmt::Display for Item<T>
 }
 
 fn get_item_value_like_string<T>(item: Option<&mut Item<T>>) -> String
-    where T: Copy + Clone + fmt::Display,
+where T: Copy + Clone + fmt::Display,
 {
     match item
     {
@@ -121,7 +126,7 @@ fn get_item_value_like_string<T>(item: Option<&mut Item<T>>) -> String
 }
 
 impl<T> fmt::Debug for Item<T>
-    where T: Copy + Clone + fmt::Display,
+where T: Copy + Clone + fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
     {
@@ -132,6 +137,74 @@ impl<T> fmt::Debug for Item<T>
         );
 
         return write!(f, "{}", str_view);
+    }
+}
+
+impl<T> PartialEq for Item<T>
+where T: Copy + Clone + fmt::Display + PartialEq,
+{
+    fn eq(self: &Item<T>, other: &Item<T>) -> bool
+    {
+        return self.value == other.value;
+    }
+}
+
+
+pub struct List<T>
+where T: Copy + Clone + fmt::Display,
+{
+    first: Option<*mut Item<T>>,
+    last:  Option<*mut Item<T>>,
+    length: usize,
+}
+
+impl<T> List<T>
+where T: Copy + Clone + fmt::Display,
+{
+    pub fn new() -> List<T>
+    {
+        List {
+            first: None,
+            last:  None,
+            length: 0,
+        }
+    }
+
+    pub fn append(&mut self, value: T)
+    {
+        self._append(value, self.length);
+    }
+
+    fn _append(&mut self, value: T, index: usize)
+    {
+        let mut item = Item::new(value, None, None);
+        let mut step = 0 as usize; 
+        let mut next = self.first;
+
+        for i in 0..self.length
+        {        
+            if i == index { break; }
+            
+            next = match next 
+            {
+                Some(node) => match unsafe { (*node).get_next() } 
+                    {
+                        Some(node_next) => Some(node_next as *mut Item<T>),
+                        _               => None,
+                    },
+                None => None,   // Only for last Item, never true
+            }
+        }
+
+        match next {
+            Some(node) => (unsafe{ * node })._next_redefinition(&item),
+            _          => self.set_last(&mut item),
+        }
+    }
+
+    fn set_last(&mut self, next: &mut Item<T>)
+    {
+
     }
 }
 
