@@ -1,32 +1,28 @@
 #[path = "../src/list_utils.rs"] mod list_utils;
-use list_utils::{Item, List};
+use list_utils::{ListNode};
 
 
 #[test]
-fn test_item()
+fn test_ListNode()
 {
-    let mut next       = Item::new("next",     None, None);
-    let mut previous   = Item::new("previous", None, None);
-    let mut item       = Item::new("self",     Some(&mut next), Some(&mut previous));
+    let mut next     = ListNode::new("next",     None, None);
+    let mut previous = ListNode::new("previous", None, None);
+    let mut tail     = ListNode::new("tail",     Some(next), Some(previous));
     
-    assert_eq!(item.value, "self");
-    assert_eq!(item.get_next().unwrap().value, "next");
-    assert_eq!(item.get_previous().unwrap().value, "previous");
+    assert_eq!(tail.value, "tail");
+    assert_eq!(tail.get_next().unwrap().borrow_mut().value, "next");
+    assert_eq!(tail.get_previous().unwrap().borrow_mut().value, "previous");
     
-    item.update();
-    next.set("next_updated");
-    previous.set("previous_updated");
-
+    tail.get_next().unwrap().borrow_mut().set("next_updated");
     
-    assert_eq!(item.get_next().unwrap().value, "next_updated");
-    assert_eq!(item.get_previous().unwrap().value, "previous_updated");
+    assert_eq!(tail.get_next().unwrap().borrow_mut().value, "next_updated");
 }
 
 #[test]
 fn test_list()
 {
-    let mut list: List<i32> = List::new();
+    //let mut list: List<i32> = List::new();
     
-    list.append(1);
-    list.append(2);
+    //list.append(1);
+    //list.append(2);
 }
