@@ -1,15 +1,18 @@
 #[path = "../src/list_utils.rs"] mod list_utils;
-use list_utils::{ListNode};
+use list_utils::{ListNode, List};
+
 
 
 #[test]
-fn test_ListNode()
-{
-    let mut next     = ListNode::new("next",     None, None);
-    let mut previous = ListNode::new("previous", None, None);
-    let mut tail     = ListNode::new("tail",     Some(next), Some(previous));
+fn test_for_node()
+{  
+    let next:     ListNode<&str> = ListNode::new("next",     None, None);
+    let previous: ListNode<&str> = ListNode::new("previous", None, None);
+    let tail:     ListNode<&str> = ListNode::new("tail",     Some(next), Some(previous));
+
     
     assert_eq!(tail.value, "tail");
+
     assert_eq!(tail.get_next().unwrap().borrow_mut().value, "next");
     assert_eq!(tail.get_previous().unwrap().borrow_mut().value, "previous");
     
@@ -21,8 +24,10 @@ fn test_ListNode()
 #[test]
 fn test_list()
 {
-    //let mut list: List<i32> = List::new();
+    let mut list: List<i32> = List::new();
     
-    //list.append(1);
-    //list.append(2);
+    list.push(1);
+    list.push(2);
+
+    println!("{}", list);
 }

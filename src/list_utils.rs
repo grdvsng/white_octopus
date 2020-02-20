@@ -1,7 +1,12 @@
+extern crate regex;
+
+use regex::Regex;
 use std::fmt;
 use std::string::{ToString};
 use std::rc::Rc;
 use std::cell::RefCell;
+
+
 
 
 #[derive(Clone)]
@@ -30,14 +35,14 @@ where T: Copy + Clone + fmt::Display,
         return this;
     }
 
-    pub fn update(&mut self)
+    fn update(&mut self)
     {
-        if let Some(rc) = self.next.clone()     
+        if let Some(rc) = self.next.clone()
         {
             rc.borrow_mut().set_previous(self); 
         }
         
-        if let Some(rc) = self.previous.clone() 
+        if let Some(rc) = self.previous.clone()
         { 
             rc.borrow_mut().set_next(self); 
         }
@@ -97,6 +102,11 @@ where T: Copy + Clone + fmt::Display,
     {
         self.value = value;
     }
+
+    pub fn get(&mut self) -> T
+    {
+        return self.value.clone();
+    }
 }
 
 impl<T> fmt::Display for ListNode<T>
@@ -129,5 +139,72 @@ where T: Copy + Clone + fmt::Display + PartialEq,
     fn eq(self: &ListNode<T>, other: &ListNode<T>) -> bool
     {
         return self.value == other.value;
+    }
+}
+
+
+pub struct List<T>
+where T: Copy + Clone + fmt::Display + PartialEq,
+{
+    head:   Option<Rc<RefCell<ListNode<T>>>>,
+    tail:   Option<Rc<RefCell<ListNode<T>>>>,
+    length: usize,
+}
+
+impl<T> List<T>
+where T: Copy + Clone + fmt::Display + PartialEq,
+{
+    pub fn new() -> List<T>
+    {
+        List{head: None, tail: None, length: 0 }
+    }
+
+    pub fn push(&mut self, elem: T)
+    {
+        let node = Rc::new(RefCell::new(ListNode::new(elem, None, None)));
+        
+        match self.head.clone()
+        {
+            Some(head) =>
+            {
+                match self.tail.clone()
+                {
+                    Some(last) => node.borrow_mut().previous = Some(last),
+                    _          => node.borrow_mut().previous = Some(head),
+                }
+
+                self.tail = Some(node.clone());
+            }
+            _ => self.head = Some(node.clone())
+        }
+        
+        node.borrow_mut().update();
+
+        self.length += 1;
+    }
+}
+
+impl<T> fmt::Display for List<T>
+where T: Copy + Clone + fmt::Display + PartialEq,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
+        let mut result = String::from("\n[");
+        let mut node   = self.head.clone();
+        let re         = Regex::new(r",$").unwrap();
+        let mut step   = 0;
+
+        while step < self.length
+        {
+            if let Some(list_node)=node
+            {
+                result += &*format!("\n\t{}: \"{}\",", step, list_node.borrow_mut().value); 
+                node    = list_node.borrow_mut().next.clone();
+            }
+
+            step += 1;
+        }
+
+        return write!(f, "{}", re.replace_all(&*result, "") + "\n]");
     }
 }
