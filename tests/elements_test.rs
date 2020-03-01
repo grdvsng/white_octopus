@@ -1,9 +1,10 @@
+#[path="../src/basic_elements.rs"]
 mod basic_elements;
 
 use basic_elements::*;
 
-
-fn main()
+#[test]
+fn test_table()
 {
     let col1 = Col::new("Name", DataType::Text, 0);
     let col2 = Col::new("Age", DataType::Integer, 0);

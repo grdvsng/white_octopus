@@ -8,7 +8,7 @@ use chrono::{Utc};
 
 
 #[derive(Debug, Clone, Copy)]
-enum DataType
+pub enum DataType
 {
     Text,
     Integer,
@@ -18,17 +18,34 @@ enum DataType
     Null
 }
 
+impl DataType
+{
+    fn get_type(&self) -> usize
+    {
+        match self
+        {
+            DataType::Text => 1,
+            DataType::Text => 2, 
+            DataType::Text => 3,
+            DataType::Text => 4,
+            DataType::Text => 5,
+            _              => 6,
+        }
+    }
+}
+
+
 impl std::cmp::PartialEq for DataType
 {
     fn eq(&self, other: &Self) -> bool
     {
-        *self == *other
+        self.get_type() == other.get_type()
     }
 }
 
 
 #[derive(Debug, Clone, Copy)]
-enum CellData
+pub enum CellData
 {
     Text(&'static str),
     Integer(i32),
@@ -43,8 +60,7 @@ impl CellData
 {
     fn get_type(&self) -> DataType
     {
-        match self
-        {
+        match *self {
             CellData::Text(x)    => DataType::Text,
             CellData::Integer(x) => DataType::Integer, 
             CellData::Float(x)   => DataType::Float,
@@ -78,30 +94,34 @@ impl Cell
 
 pub struct Col
 {
-    cells:     Vec<Cell>,
+    rows:      Vec<Cell>,
     name:      &'static str,
     index:     usize,
     data_type: DataType,
 }
 
 impl Col {
-    fn new(name: &'static str, index: usize, data_type: DataType) -> Col
+    pub fn new(name: &'static str, data_type: DataType, index: usize) -> Col
     {
         Col {
-            cells:     Vec::new(),
+            rows:      Vec::new(),
             name:      name,
             index:     index,
             data_type: data_type,
         }
     }
 
-    fn add(&mut self, value: CellData)
+    pub fn add(&mut self, value: CellData) -> bool
     {
         if self.data_type == value.get_type()
         {
-           self.cells.push(Cell::new(self.cells.len(), self.index, value));
+           self.rows.push(Cell::new(self.rows.len(), self.index, value));
+           
+           return true;
         } else {
-            panic!(format!("Current type is '{:?}', but you pushed '{:?}'", &self.data_type, value.get_type()))
+            println!("Current type is '{:?}', but you pushed '{:?}'", &self.data_type, value.get_type());
+
+            return false;
         }
     }
 }
@@ -118,7 +138,7 @@ impl Table
 {
     pub fn new(columns: Vec<Col>, name: &'static str)-> Table
     {
-        let t = Table{
+        let mut t = Table{
                 columns: columns,
                 name: name,
             };
@@ -132,7 +152,7 @@ impl Table
     {
         let mut step = 0;
 
-        for col in &self.columns
+        for col in &mut self.columns
         {
             col.index = step;
 
@@ -142,32 +162,35 @@ impl Table
 
     pub fn add(&mut self, column_name: &'static str, data_type: DataType)
     {
-        let mut col = Col::new(column_name, self.columns.len(), data_type);
+        let col = Col::new(column_name, data_type, self.columns.len());
 
         self.columns.push(col);
     }
 
-    pub fn insert(&self, column_names: Vec<&'static str>, values: Vec<CellData>)
+    pub fn insert(&mut self, column_names: Vec<&'static str>, values: Vec<CellData>) -> bool
     {
         let mut step = 0;
 
-        for column_name in &column_names
+        for column_name in column_names
         {
             let mut finded = false;
 
-            for col in &self.columns
+            for col in &mut self.columns
             {
-                if col.name == *column_name
+                if col.name == column_name
                 {
-                    col.add(values[step]);
-                    finded = true;
+                    finded = col.add(values[step]);
                 }
             }
 
             if !finded
             {
-                panic!(format!("Column {} not exists!", column_name));
+                println!("Column {} not exists!", column_name);
+
+                return false;
             } else { step += 1; }
         }
+
+        return true;
     }
 }
