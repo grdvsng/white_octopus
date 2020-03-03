@@ -284,10 +284,10 @@ impl Table
         {
             let mut value = format!("{}", data);
             let real_val  = 
-                if value.len() > max_line_len
+                if value.len() >= max_line_len
                 {
-                    Regex::new(&*format!(r".{}", max_line_len)).unwrap().split(&*value).collect::<Vec<&str>>()[0]
-                } else { &*value };
+                    format!(r"{}...", (&*value).chars().into_iter().take(max_line_len-5).collect::<String >())
+                } else { value };
             
                 cur_row += &*format!(" {}{}|", real_val, " ".repeat(max_line_len - real_val.len()) );
         }

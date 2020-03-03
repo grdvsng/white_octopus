@@ -13,9 +13,9 @@ fn main()
     t.insert(vec!["Name", "Age"], vec![CellData::Text("Vasia"), CellData::Integer(23)]);
 
     t.add("Address", DataType::Text);
-    
+
     t.insert(vec!["Name", "Age", "Address"], vec![CellData::Text("Max"), CellData::Integer(35), CellData::Text("Oxford 31")]);
-    t.insert(vec!["Name", "Age", "Address"], vec![CellData::Text("Nick"), CellData::Integer(15), CellData::Text("NY 12")]);
+    t.insert(vec!["Name", "Age", "Address"], vec![CellData::Text("Nick"), CellData::Integer(15), CellData::Text("NY Grow Stree t 12|123 'A' United State of America")]);
     
     println!("{}", t);
 }
