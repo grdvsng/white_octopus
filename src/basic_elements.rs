@@ -1,16 +1,15 @@
 extern crate regex;
 extern crate chrono;
 
-#[path="./array_utils.rs"]
-mod array_utils;
-
-use regex::Regex;
 use std::fmt;
 use std::string::{ToString};
 use chrono::{Utc, DateTime, NaiveDateTime};
-use array_utils::*;
-use std::sync::Arc;
-use std::cell::RefCell;
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use regex::{Regex, Split};
+
+
+const COLUMN_WIDTH: usize = 30;
 
 
 #[derive(Debug, Clone, Copy)]
@@ -21,7 +20,8 @@ pub enum DataType
     Float,
     Boolean,
     Time,
-    Null
+    Table,
+    Null,
 }
 
 impl DataType
@@ -35,20 +35,22 @@ impl DataType
             DataType::Float   => 3,
             DataType::Boolean => 4,
             DataType::Time    => 5,
-            _                 => 6,
+            DataType::Table   => 6,
+            _                 => 0,
         }
     }
 
-    fn get_null(&self) -> CellData
+    fn get_null(&self) -> TData
     {
         match self
         {
-            DataType::Text    => CellData::Text("0"),
-            DataType::Integer => CellData::Integer(0), 
-            DataType::Float   => CellData::Float(0.0),
-            DataType::Boolean => CellData::Boolean(false),
-            DataType::Time    => CellData::Time(DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc)),
-            _                 => CellData::Null,
+            DataType::Text    => TData::Text("0"),
+            DataType::Integer => TData::Integer(0), 
+            DataType::Float   => TData::Float(0.0),
+            DataType::Boolean => TData::Boolean(false),
+            DataType::Time    => TData::Time(DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc)),
+            DataType::Table   => TData::Table(Table::new("null".to_string())),
+            _                 => TData::Null,
         }
     }
 }
@@ -63,28 +65,28 @@ impl std::cmp::PartialEq for DataType
 }
 
 
-#[derive(Debug, Clone, Copy)]
-pub enum CellData
+#[derive(Clone)]
+pub enum TData
 {
     Text(&'static str),
     Integer(i32),
     Float(f32),
     Boolean(bool),
     Time(DateTime<Utc>),
+    Table(Table),
     Null
 }
 
-
-impl CellData 
+impl TData 
 {
     fn get_type(&self) -> DataType
     {
         match *self {
-            CellData::Text(x)    => DataType::Text,
-            CellData::Integer(x) => DataType::Integer, 
-            CellData::Float(x)   => DataType::Float,
-            CellData::Boolean(x) => DataType::Boolean,
-            CellData::Time(x)    => DataType::Time,
+            TData::Text(_)    => DataType::Text,
+            TData::Integer(_) => DataType::Integer, 
+            TData::Float(_)   => DataType::Float,
+            TData::Boolean(_) => DataType::Boolean,
+            TData::Time(_)    => DataType::Time,
             _                    => DataType::Null,
         }
     }
@@ -92,17 +94,41 @@ impl CellData
     fn stringify(&self) -> String
     {
         match *self {
-            CellData::Text(x)    => format!("{}", x),
-            CellData::Integer(x) => format!("{}", x), 
-            CellData::Float(x)   => format!("{}", x),
-            CellData::Boolean(x) => format!("{}", x),
-            CellData::Time(x)    => format!("{}", x),
-            _                    => format!("{}", "null"),
+            TData::Text(x)    => format!("\"{}\"", x),
+            TData::Integer(x) => format!("{}", x), 
+            TData::Float(x)   => format!("{}", x),
+            TData::Boolean(x) => format!("{}", x),
+            TData::Time(x)    => format!("\"{}\"", x),
+            _                 => format!("{}", "null"),
         }
     }
 }
 
-impl fmt::Display for CellData
+impl PartialOrd for TData 
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> 
+    {
+        Some(self.stringify().cmp(&other.stringify()))
+    }
+}
+
+impl PartialEq for TData 
+{
+    fn eq(&self, other: &Self) -> bool 
+    {
+        (self.get_type() == other.get_type()) && (self.stringify() == other.stringify())
+    }
+}
+
+impl fmt::Display for TData
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+    {
+        write!(f, "{}", self.stringify())
+    }
+}
+
+impl fmt::Debug for TData
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
     {
@@ -111,218 +137,287 @@ impl fmt::Display for CellData
 }
 
 
-#[derive(Clone)]
-pub struct Cell
+struct StringUtils;
+impl   StringUtils 
 {
-    row_index: usize,
-    col_index: usize,
-    value:     CellData,
-}
-
-impl Cell 
-{
-    fn new(row_index: usize, col_index: usize,  value: CellData) -> Cell
+    pub fn part_split(text: String, mut every: usize) -> Vec<String>
     {
-        Cell {
-            row_index: row_index,
-            col_index: col_index,
-            value:     value,  
-        }
-    }
-}
+        let mut arr                   = Vec::new();
+        let mut line                  = "".to_string();
+        let (mut step, mut real_step) = (0, 0);
+        
+        if text.len() < every { return vec![text]; }
 
-impl fmt::Display for Cell
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-    {
-        write!(f, "{}", self.value)
-    }
-}
-
-impl fmt::Debug for Cell
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-    {
-        write!(f, "{:?}", self)
-    }
-}
-
-pub struct Col
-{
-    cells:     Vec<Arc<RefCell<Cell>>>,
-    name:      &'static str,
-    index:     usize,
-    data_type: DataType,
-}
-
-impl Col {
-    pub fn new(name: &'static str, data_type: DataType, index: usize) -> Col
-    {
-        Col {
-            cells:     Vec::new(),
-            name:      name,
-            index:     index,
-            data_type: data_type,
-        }
-    }
-
-    pub fn add(&mut self, value: CellData) -> Option<Arc<RefCell<Cell>>>
-    {
-        if (self.data_type == value.get_type()) || (DataType::Null == value.get_type())
+        for ch in text.chars()
         {
-            let _cell = Arc::new(RefCell::new(Cell::new(self.cells.len(), self.index, value)));
+            real_step += 1;
+            line      += &*ch.to_string();
             
-            self.cells.push(_cell.clone());
-           
-            return Some(_cell);
-        }
+            if step == every-1 || real_step == text.len()
+            {
+                arr.push(line);
+                
+                step = 0;
+                line = "".to_string();
+
+                continue;
+            }
             
-        println!("Current type is '{:?}', but you pushed '{:?}'\n({:?})", &self.data_type, value.get_type(),value );
-
-        return None;
-    }
-}
-
-
-pub struct Table
-{
-    columns:       Vec<Col>,
-    columns_names: Vec<&'static str>,
-    rows:          Vec<Vec<Arc<RefCell<Cell>>>>,
-    pub name:      &'static str,
-}
-
-
-impl Table
-{
-    pub fn new(columns: Vec<Col>, name: &'static str)-> Table
-    {
-        let mut t = Table
-        {
-                columns:       columns,
-                columns_names: Vec::new(),
-                name:          name,
-                rows:          Vec::new(),
-            };
-
-        t.update_col();
-
-        return t;
-    }
-
-    fn update_col(&mut self)
-    {
-        let mut step = 0;
-
-        for col in &mut self.columns
-        {
-            col.index = step;
-
-            self.columns_names.push(col.name.clone());
-
             step += 1;
         }
-    }
 
-    pub fn add(&mut self, column_name: &'static str, data_type: DataType)
+        return arr;
+    }
+}
+
+
+#[derive(Debug)]
+pub enum TableResult 
+{
+    ColumnExists(String),
+    ColumnNotExists(String),
+    InvalidTypes(String),
+    Ok,
+}
+
+impl TableResult
+{
+    fn get_type(&self) -> usize
     {
-        let mut col = Col::new(column_name, data_type, self.columns.len());
-        
-        for i in 0..self.rows.len()
+        use TableResult::*;
+
+        match *self
         {
-            self.rows[i].push(col.add(CellData::Null).unwrap());
+            ColumnExists(_)    => 1,
+            ColumnNotExists(_) => 2,
+            InvalidTypes(_)    => 3,
+            _                  => 0,
         }
-        
-        self.columns.push(col);
-        self.columns_names.push(column_name);
     }
+}
 
-    fn _insert(&mut self, column_names: Vec<&'static str>, values: Vec<CellData>) -> bool
+impl PartialEq for TableResult 
+{
+    fn eq(&self, other: &Self) -> bool 
     {
-        let mut step                          = 0;
-        let mut row: Vec<Arc<RefCell<Cell>>>  = Vec::new();
+        return self.get_type() == other.get_type();
+    }
+}
 
-        for name in &self.columns_names
-        {
-            let index = Array_Utils::index_of(&column_names, name);
-            let value = if (index != -1) { values[index as usize] } else { CellData::Null };
-            let col   = self.columns[step].add(value);
 
-            if let Some(item) = col
+struct TableUtils;
+impl   TableUtils
+{
+    fn build_row_from_vec_str(vec_str: Vec<Vec<String>>) -> String
+    {
+        let mut cur_str = "".to_string();
+        
+        if vec_str.len() > 0
+        {    
+            let rows_len        = vec_str[0].len();
+            let col_lengt       = vec_str.len();
+            let mut curent_row  = 0;
+
+            while curent_row < rows_len
             {
-                row.push(item);
-                step += 1;
-            } else { return false; }
-        }
-
-        self.rows.push(row);
-        
-        return true;
-    }
-
-    pub fn insert(&mut self, column_names: Vec<&'static str>, values: Vec<CellData>) -> bool
-    {
-        let def:  Vec<&'static str> = Array_Utils::filter(&self.columns_names, &|&x| Array_Utils::index_of(&column_names, x) == -1);
-
-        if def.len() > 0 
-        { 
-            println!("Columns: '{:?}' is not exists!", def); 
-        
-            return false;
-        }  else { 
-            return self._insert(column_names, values); 
-        }
-
-    }
-    
-    fn stringify_rows<T>(&self, row: &Vec<T>, max_line_len: usize)-> String
-    where T: fmt::Display + fmt::Debug + Clone
-    {
-        let mut cur_row = String::from("");
-
-        for mut data in row
-        {
-            let mut value = format!("{}", data);
-            let real_val  = 
-                if value.len() >= max_line_len
+                for i in 0..col_lengt
                 {
-                    format!(r"{}...", (&*value).chars().into_iter().take(max_line_len-5).collect::<String >())
-                } else { value };
-            
-                cur_row += &*format!(" {}{}|", real_val, " ".repeat(max_line_len - real_val.len()) );
+                    cur_str += &*vec_str[i][curent_row];
+                }
+
+                curent_row += 1;
+                if curent_row < rows_len { cur_str += "\n"; }
+            }
         }
 
-        return cur_row;
+        return cur_str;
     }
 
-    fn get_column_header(&self) -> String
+    fn _build_row<T>(vec_row: &Vec<T>, max_line: usize) -> String
+    where T: fmt::Display + Clone
     {
-        let mut max     = 30;
-        let line        = "=".repeat((max * self.columns_names.len()) + (self.columns_names.len()*2));   
+        let mut cur_arr = Vec::new();
 
-        return format!("\n{0}\n{1}\n{0}", line, self.stringify_rows(&self.columns_names, max));
+        for col in vec_row
+        {
+            let splited: Vec<String> = StringUtils::part_split(format!("{}", col), COLUMN_WIDTH);
+            let mut colm             = Vec::new();
+            
+            for i in 0..max_line
+            {
+                if (splited.len()) as isize > i as isize
+                {
+                    colm.push(format!(" {}{}|", splited[i], " ".repeat((COLUMN_WIDTH - format!("{}", splited[i]).len()) as usize)));
+                } else { colm.push(format!(" {}|", " ".repeat(COLUMN_WIDTH))); }
+            }
+
+            cur_arr.push(colm);
+        }
+
+        return Self::build_row_from_vec_str(cur_arr);
+    }
+
+    fn build_row<T>(vec_row: &Vec<T>) -> String
+    where T: fmt::Display + Clone
+    {
+        let mut sorted  = vec_row.clone();
+        
+        &sorted.sort_by(|a, b| format!("{}", b).len().cmp(&format!("{}", a).len()));
+
+        if sorted.len() > 0
+        {
+            let line_len = format!("{}", sorted[0]).len();
+            let max_line = if line_len > COLUMN_WIDTH { ((line_len as f32 / COLUMN_WIDTH as f32) as f32).ceil() } else { 1.0 };
+
+            return Self::_build_row(vec_row, max_line as usize);
+        }
+
+        return "".to_string();
+    }
+
+    pub fn stringify(_table: &Table) -> String
+    {
+        let mut cur_str = Self::build_row(&_table.columns_sorted);
+        let line1       = "=".repeat(cur_str.len());
+        let line2       = "-".repeat(cur_str.len());
+        cur_str         = format!("{0}\n{1}\n{0}", line1, cur_str);
+        
+        for row in _table.rows.values()
+        {
+            let mut values: Vec<&TData> = Vec::new();
+           
+            for val in row.values() { values.push(val); }
+            
+            cur_str += &*format!("\n{1}\n{0}", line2, Self::build_row(&values));
+        }
+
+        return cur_str;
+    }
+
+    pub fn json_stringify(_table: &Table) -> String
+    {
+        let mut cur_str = String::from("[");
+        let mut step    = 0;
+        let length      = _table.rows.len();
+
+        for row in _table.rows.values()
+        {
+            cur_str += "{";
+
+            for column_name in &_table.columns_sorted
+            {
+                cur_str += &*format!("\n\t\"{}\": {},", &column_name, row.get(column_name).unwrap());
+            }
+
+            step    += 1;
+
+            cur_str += if step < length {  "\n}, " } else { "\n}" };
+        }
+
+        return cur_str + "]"
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Table
+{
+    columns_sorted: Vec<String>,
+    columns:      HashMap<String, DataType>,
+    rows:         HashMap<usize, HashMap<String, TData>>,
+    name:         String,
+}
+
+
+impl Table 
+{
+    // Basic Table
+
+    pub fn new(name: String) -> Table
+    {
+        return Table
+        { 
+            columns_sorted: Vec::new(),
+            columns:      HashMap::new(),  
+            rows:         HashMap::new(),
+            name:         name,
+        };
+    }
+
+    pub fn json_stringify(&self) -> String
+    {
+        return TableUtils::json_stringify(self);
     }
 
     pub fn stringify(&self) -> String
     {
-        let table_params = self.get_column_header();
-        let mut cur_str  = table_params;
-        let max_line_len = 30;
-        let line         = "-".repeat((max_line_len * self.columns_names.len()) + (self.columns_names.len()*2));
+        return TableUtils::stringify(self);
+    }
 
-        for row in &self.rows
+    pub fn add(&mut self, column_name: String,  datatype: DataType ) -> TableResult
+    {
+        match self.columns.get(&*column_name) 
         {
-            let mut real_row: Vec<Cell> = Vec::new();
-
-            for cell in row
+            Some(_) => return TableResult::ColumnExists(column_name),
+            _ => 
             {
-                real_row.push(cell.borrow().clone());
-            }
+                self.columns.insert(column_name.clone(), datatype);
+                self.columns_sorted.push(column_name);
 
-            cur_str += &*format!("\n{}\n{}", self.stringify_rows(&real_row, max_line_len), line);
+                return TableResult::Ok;
+            }
+        }
+    }
+
+    pub fn insert(&mut self, columns_name: Vec<String>, values: Vec<TData>) -> TableResult
+    {
+        let valid = self.insert_validator(&columns_name);
+        
+        if TableResult::Ok == valid
+        {
+            return self._insert(columns_name, values);
+        } else {
+            return valid;
+        }
+    }
+
+    fn insert_validator(&self, columns_name: &Vec<String>) -> TableResult
+    {
+        for column_name in columns_name
+        {
+            match self.columns.get(&*column_name) 
+            {
+                Some(_) => (),
+                _       => { return TableResult::ColumnNotExists((*column_name.clone()).to_string()); },
+            }
         }
 
-        return cur_str;
+        return TableResult::Ok;
+    }
+    
+    fn _insert(&mut self, columns_name: Vec<String>, values: Vec<TData>) -> TableResult
+    {
+        let mut record: HashMap<String, TData> = HashMap::new();
+
+        for key in self.columns.keys()
+        {
+            let index = match columns_name.iter().position(|s| &*s == key) { Some(x) => x as isize, _ => -1,};
+
+            if index == -1
+            {
+                record.insert(String::from(key.clone()), self.columns.get(*&key).unwrap().get_null());
+            } else {
+                let value = &values[index as usize];
+
+                if &value.get_type() == self.columns.get(*&key).unwrap()
+                {
+                    record.insert(String::from(key.clone()), value.clone());
+                } else { return TableResult::InvalidTypes(format!("Column type: '{:?}', Value type: '{:?}'", self.columns.get(*&key).unwrap(), value.get_type())); }
+            }
+        }
+
+        self.rows.insert(self.rows.keys().len()+1, record);
+
+        return TableResult::Ok;
     }
 }
 
@@ -330,6 +425,6 @@ impl fmt::Display for Table
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
     {
-        write!(f, "{}", self.stringify())
+        write!(f, "{}", TableUtils::stringify(self))
     }
 }
